@@ -2,42 +2,34 @@ from flask import Flask, request, jsonify
 import pickle
 import pandas as pd
 from flask_cors import CORS
-import sys
 
 app = Flask(__name__)
+
+#Permitir llamadas de otros dominios
 CORS(app)
-
-# Cargar el modelo
-with open('tiempos-vuelo.pkl', 'rb') as f:
-    model = pickle.load(f)
-
 
 # Cargar el modelo y el diccionario
 model = pickle.load(open('tiempos-vuelo.pkl', 'rb'))
 dictionary = pickle.load(open('tiempos-vuelo-dict.pkl', 'rb'))
-df_raw = pd.DataFrame.from_dict(dictionary)
 
+# Endpoint para realizar la prediccon
 @app.route('/predict', methods=['POST'])
 def predict():
+
     # Obtener los datos de la solicitud
     data = request.get_json()
-
-    print(data, file=sys.stdout)
 
     # Transformar la fecha
     data['Fecha'] = pd.to_datetime(data['Fecha'])
     data['dia_nombre'] = data['Fecha'].day_name()
     data['dia_numero'] = data['Fecha'].day
     data['mes_numero'] = data['Fecha'].month
-    #data['temporada_alta'] = 1# data['Fecha'].month.isin([12, 1, 2, 3]).astype(int)
-
+    
     # Determinar la temporada alta
     data['temporada_alta'] = check_peak_season(data['Fecha'])
 
     # Eliminar la columna original 'Fecha'
     del data['Fecha']
-
-    print(data, file=sys.stdout)
 
     # Crear un DataFrame con los datos de entrada
     input_data = pd.DataFrame([data])
@@ -45,15 +37,8 @@ def predict():
     # Hacer la predicción
     prediction = model.predict(input_data)[0]
 
-    hours = prediction // 60  # Truncating integer division
-    minutes = prediction % 60
-    #return str(prediction)
-    resultado =  str(round(hours)).zfill(2) + ":" + str(round(minutes)).zfill(2)
-    return jsonify({'duration': resultado})
-
-    #duration = pd.to_datetime(prediction, format='%H%M')
-   #return str(duration)
-    #return jsonify({'Duración del vuelo': prediction})
+    duration = format_time(prediction)
+    return jsonify({'duration': duration})
 
 @app.route("/")
 def index():
@@ -61,7 +46,6 @@ def index():
 
 # Determinar si el vuelo es de temporada alta
 # temporada alta = 1 si Fecha está entre 15-Dic y 3-Mar, o 15-Jul y 31-Jul, o 11-Sep y 30-Sep, 0 si no.
-
 def check_peak_season(date):
     # Convertimos la fecha a datetime y extraemos el mes y el día
     date = pd.to_datetime(date)
@@ -80,6 +64,17 @@ def check_peak_season(date):
         if start <= month_day <= end:
             return 1  # Temporada alta
     return 0  # Fuera de temporada alta
+
+def format_time(time):
+    # Separo horas y minutos
+    hours = time // 60
+    minutes = time % 60
+
+    # Formateo horas y minutos
+    format_hours = str(round(hours)).zfill(2)
+    format_minutes = str(round(minutes)).zfill(2)
+
+    return format_hours + ":" + format_minutes
 
 
 if __name__ == '__main__':
