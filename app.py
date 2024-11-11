@@ -34,11 +34,16 @@ def predict():
     # Crear un DataFrame con los datos de entrada
     input_data = pd.DataFrame([data])
 
+    duracion_promedio = obtener_tiempo_promedio(data['Origen'], data['Destino'], data['Aerolinea'])
+    if duracion_promedio is None:
+       return jsonify("No se encontró un vuelo con los datos provistos"), 400
+
     # Hacer la predicción
     prediction = model.predict(input_data)[0]
 
     duration = format_time(prediction)
-    return jsonify({'duration': duration})
+    duracion_promedio = format_time(duracion_promedio)
+    return jsonify({'duration': duration, 'promedio': duracion_promedio})
 
 @app.route("/")
 def index():
@@ -75,6 +80,35 @@ def format_time(time):
     format_minutes = str(round(minutes)).zfill(2)
 
     return format_hours + ":" + format_minutes
+
+def mean_time_flight(origen, destino, aerolinea):
+    
+    df_tiempo_vuelos = pd.read_csv("./promedio_tiempos_vuelo.csv")
+
+    tiempo_promedio = df_tiempo_vuelos[(df_tiempo_vuelos['Aerolinea'] == aerolinea)
+                      & (df_tiempo_vuelos['Origen'] == origen)
+                      & (df_tiempo_vuelos['Destino'] == destino)]['Tiempo_Promedio'].values[0]
+    
+    tiempo_promedio = round((pd.to_timedelta(tiempo_promedio).total_seconds() / 60),2)
+    return tiempo_promedio
+
+def obtener_tiempo_promedio(origen, destino, aerolinea):
+  
+  try:
+    df_tiempo_vuelos = pd.read_csv("./promedio_tiempos_vuelo.csv")
+
+    tiempo_promedio = df_tiempo_vuelos[
+        (df_tiempo_vuelos['Origen'] == origen) &
+        (df_tiempo_vuelos['Destino'] == destino) &
+        (df_tiempo_vuelos['Aerolinea'] == aerolinea)
+    ]['Tiempo_Promedio'].values[0]
+
+    # Convertir a minutos
+    tiempo_promedio_minutos = round(pd.to_timedelta(tiempo_promedio).total_seconds() / 60) 
+    return tiempo_promedio_minutos
+  except (IndexError, TypeError):
+    # Manejar el caso donde no se encuentra el vuelo
+    return None
 
 
 if __name__ == '__main__':
